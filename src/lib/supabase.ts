@@ -16,7 +16,13 @@ export const supabase = createClient(url ?? 'https://not-configured.supabase.co'
   },
 });
 
-export type Profile = { id: string; email: string; display_name: string };
+export type Profile = {
+  id: string;
+  email: string;
+  display_name: string;
+  avatar_path?: string | null;
+  avatar_url?: string | null; // filled in by the app from avatar_path
+};
 
 export type Device = {
   id: string;

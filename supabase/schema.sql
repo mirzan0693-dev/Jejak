@@ -379,3 +379,36 @@ revoke execute on function public.apply_command(), public.check_geofences(), pub
   from public, anon, authenticated;
 revoke execute on function public.can_view(uuid), public.is_connected(uuid) from public, anon;
 grant execute on function public.can_view(uuid), public.is_connected(uuid) to authenticated;
+
+-- ---------- profile photos ----------
+alter table public.profiles add column if not exists avatar_path text;
+
+create or replace function public.is_active_connection(other uuid) returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1 from public.shares s
+    where s.status = 'active' and (s.expires_at is null or s.expires_at > now())
+      and ((s.owner_id = other and s.viewer_id = auth.uid())
+        or (s.viewer_id = other and s.owner_id = auth.uid())))
+$$;
+revoke execute on function public.is_active_connection(uuid) from public, anon;
+grant execute on function public.is_active_connection(uuid) to authenticated;
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('avatars', 'avatars', false, 2097152, array['image/jpeg','image/png','image/webp'])
+on conflict (id) do nothing;
+
+create policy avatars_insert_own on storage.objects for insert to authenticated
+  with check (bucket_id = 'avatars' and (storage.foldername(name))[1] = auth.uid()::text);
+create policy avatars_update_own on storage.objects for update to authenticated
+  using (bucket_id = 'avatars' and (storage.foldername(name))[1] = auth.uid()::text)
+  with check (bucket_id = 'avatars' and (storage.foldername(name))[1] = auth.uid()::text);
+create policy avatars_delete_own on storage.objects for delete to authenticated
+  using (bucket_id = 'avatars' and (storage.foldername(name))[1] = auth.uid()::text);
+-- photos are visible only to yourself and people with an accepted, unexpired share
+create policy avatars_read_connected on storage.objects for select to authenticated
+  using (bucket_id = 'avatars' and (
+    (storage.foldername(name))[1] = auth.uid()::text
+    or public.is_active_connection(((storage.foldername(name))[1])::uuid)));
+
+alter publication supabase_realtime add table public.profiles;

@@ -10,6 +10,7 @@ import {
   startBackgroundUpdates,
   stopBackgroundUpdates,
 } from '../lib/location';
+import { pickAndUploadAvatar, removeAvatar } from '../lib/avatar';
 import { displayName, errorText, supabase, type Device, type Profile, type Share } from '../lib/supabase';
 import { color, font, MAP_STYLE, radius, space } from '../theme';
 import { Avatar, Button, Card, Chip, Field, Row, Sheet, T, distanceText, isStale, timeAgo } from '../ui';
@@ -73,7 +74,7 @@ export function Main({ userId }: { userId: string }) {
                 lngLat={[p.device.lng, p.device.lat]}
                 onPress={() => setPerson(p.profile.id)}
               >
-                <Avatar name={displayName(p.profile)} ring={isStale(p.device.located_at) ? color.textMuted : color.accent} />
+                <Avatar name={displayName(p.profile)} url={p.profile.avatar_url} ring={isStale(p.device.located_at) ? color.textMuted : color.accent} />
               </ViewAnnotation>
             ) : null,
           )}
@@ -241,7 +242,7 @@ function PeopleTab({
       {view.visiblePeople.map((p) => (
         <Row
           key={p.profile.id}
-          left={<Avatar name={displayName(p.profile)} ring={isStale(p.device?.located_at ?? null) ? color.textMuted : color.accent} />}
+          left={<Avatar name={displayName(p.profile)} url={p.profile.avatar_url} ring={isStale(p.device?.located_at ?? null) ? color.textMuted : color.accent} />}
           title={displayName(p.profile)}
           subtitle={[timeAgo(p.device?.located_at ?? null), distanceText(myPhone, p.device)].filter(Boolean).join(' · ')}
           onPress={() => onOpen(p.profile.id)}
@@ -251,7 +252,7 @@ function PeopleTab({
       {view.outgoing.map(({ share, other }) => (
         <Row
           key={share.id}
-          left={<Avatar name={displayName(other)} ring={color.warning} />}
+          left={<Avatar name={displayName(other)} url={other.avatar_url} ring={color.warning} />}
           title={displayName(other)}
           subtitle="Waiting for them to accept"
           right={
@@ -648,6 +649,23 @@ function MeTab({ data, view, myPhone, userId }: { data: AppData; view: View_; my
     data.refresh();
   }
 
+  const [photoBusy, setPhotoBusy] = useState(false);
+  async function changePhoto() {
+    setPhotoBusy(true);
+    try {
+      if (await pickAndUploadAvatar(userId, data.me?.avatar_path)) await data.refresh();
+    } catch (e) {
+      RNAlert.alert('Could not save photo', errorText(e));
+    } finally {
+      setPhotoBusy(false);
+    }
+  }
+  async function deletePhoto() {
+    if (!data.me?.avatar_path) return;
+    await removeAvatar(userId, data.me.avatar_path);
+    data.refresh();
+  }
+
   async function signOut() {
     await forgetLocalDevice();
     await supabase.auth.signOut();
@@ -677,7 +695,7 @@ function MeTab({ data, view, myPhone, userId }: { data: AppData; view: View_; my
         {view.watchers.map((w) => (
           <Row
             key={w.share.id}
-            left={<Avatar name={displayName(w.profile)} size={32} />}
+            left={<Avatar name={displayName(w.profile)} url={w.profile.avatar_url} size={32} />}
             title={displayName(w.profile)}
             subtitle={w.share.expires_at ? `Until ${new Date(w.share.expires_at).toLocaleString()}` : 'Until you stop'}
             right={
@@ -738,6 +756,23 @@ function MeTab({ data, view, myPhone, userId }: { data: AppData; view: View_; my
       </Card>
 
       <Card>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
+          <Avatar name={displayName(data.me)} url={data.me?.avatar_url} size={64} />
+          <View style={{ flex: 1, gap: space.sm }}>
+            <Button
+              label={photoBusy ? 'Uploading…' : data.me?.avatar_path ? 'Change photo' : 'Add a photo'}
+              variant="secondary"
+              loading={photoBusy}
+              onPress={changePhoto}
+            />
+            {data.me?.avatar_path ? (
+              <Pressable onPress={deletePhoto} accessibilityRole="button">
+                <Text style={{ color: color.danger, fontWeight: '600', textAlign: 'center' }}>Remove photo</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        </View>
+        <T muted>Only people you share with can see your photo.</T>
         <Field label="Your name" value={name} onChangeText={setName} onEndEditing={saveName} />
         <T muted>{data.me?.email}</T>
         <Button label="Sign out" variant="secondary" onPress={signOut} />

@@ -42,6 +42,14 @@
           "color": "#2BB673"
         }
       ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Jejak uses a photo you choose as your profile picture, shown only to people you share with.",
+          "cameraPermission": false,
+          "microphonePermission": false
+        }
+      ],
       "@maplibre/maplibre-react-native",
       "expo-dev-client"
     ]

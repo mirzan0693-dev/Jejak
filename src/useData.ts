@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { avatarUrls } from './lib/avatar';
 import { runPendingCommands } from './lib/location';
 import { supabase, type Alert, type Device, type Geofence, type Profile, type Share } from './lib/supabase';
 
@@ -32,7 +33,7 @@ export function useAppData(userId: string): AppData {
     busy.current = true;
     try {
       const [p, sh, d, g, a] = await Promise.all([
-        supabase.from('profiles').select('id, email, display_name'),
+        supabase.from('profiles').select('id, email, display_name, avatar_path'),
         supabase.from('shares').select('*'),
         supabase.from('devices').select('*').order('created_at'),
         supabase.from('geofences').select('*').eq('active', true),
@@ -41,6 +42,11 @@ export function useAppData(userId: string): AppData {
       const err = p.error ?? sh.error ?? d.error ?? g.error ?? a.error;
       const profiles: Record<string, Profile> = {};
       for (const row of (p.data ?? []) as Profile[]) profiles[row.id] = row;
+      const paths = Object.values(profiles)
+        .map((x) => x.avatar_path)
+        .filter((x): x is string => !!x);
+      const urls = paths.length ? await avatarUrls(paths).catch(() => ({}) as Record<string, string>) : {};
+      for (const prof of Object.values(profiles)) prof.avatar_url = prof.avatar_path ? urls[prof.avatar_path] ?? null : null;
       const now = Date.now();
       setState({
         me: profiles[userId] ?? null,
@@ -64,6 +70,7 @@ export function useAppData(userId: string): AppData {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'devices' }, refresh)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'shares' }, refresh)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'alerts' }, refresh)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles' }, refresh)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'commands' }, () => {
         runPendingCommands();
       })

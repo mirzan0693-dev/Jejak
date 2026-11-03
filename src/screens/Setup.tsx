@@ -1,17 +1,40 @@
 import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
 import { useState } from 'react';
-import { Linking, ScrollView } from 'react-native';
+import { Linking, ScrollView, View } from 'react-native';
+import { avatarUrls, pickAndUploadAvatar } from '../lib/avatar';
 import { startBackgroundUpdates } from '../lib/location';
 import { errorText, supabase } from '../lib/supabase';
 import { color, space } from '../theme';
-import { Button, Card, Field, T } from '../ui';
+import { Avatar, Button, Card, Field, T } from '../ui';
 
 export function Setup({ userId, currentName, onDone }: { userId: string; currentName: string; onDone: () => void }) {
   const [name, setName] = useState(currentName);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [needsSettings, setNeedsSettings] = useState(false);
+  const [photoUri, setPhotoUri] = useState<string | null>(null);
+  const [photoPath, setPhotoPath] = useState<string | null>(null);
+  const [photoBusy, setPhotoBusy] = useState(false);
+
+  async function addPhoto() {
+    setError(null);
+    setPhotoBusy(true);
+    try {
+      if (await pickAndUploadAvatar(userId, photoPath)) {
+        const { data } = await supabase.from('profiles').select('avatar_path').eq('id', userId).single();
+        if (data?.avatar_path) {
+          setPhotoPath(data.avatar_path);
+          const urls = await avatarUrls([data.avatar_path]);
+          setPhotoUri(urls[data.avatar_path] ?? null);
+        }
+      }
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setPhotoBusy(false);
+    }
+  }
 
   async function finish() {
     setError(null);
@@ -43,7 +66,18 @@ export function Setup({ userId, currentName, onDone }: { userId: string; current
       <T size="heading" bold>
         Set up
       </T>
-      <Field label="Your name" value={name} onChangeText={setName} placeholder="e.g. Mirzan" />
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
+        <Avatar name={name || '?'} url={photoUri} size={64} />
+        <View style={{ flex: 1 }}>
+          <Button
+            label={photoUri ? 'Change photo' : 'Add a photo (optional)'}
+            variant="secondary"
+            loading={photoBusy}
+            onPress={addPhoto}
+          />
+        </View>
+      </View>
+      <Field label="Your name" value={name} onChangeText={setName} placeholder="Your name" />
       <Card>
         <T bold>How sharing works</T>
         <T muted>

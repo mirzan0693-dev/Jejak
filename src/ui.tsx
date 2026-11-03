@@ -1,6 +1,7 @@
 import { type ReactNode } from 'react';
 import {
   ActivityIndicator,
+  Image,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -102,7 +103,33 @@ export function T({
   );
 }
 
-export function Avatar({ name, size = 40, ring }: { name: string; size?: number; ring?: string }) {
+export function Avatar({
+  name,
+  size = 40,
+  ring,
+  url,
+}: {
+  name: string;
+  size?: number;
+  ring?: string;
+  url?: string | null;
+}) {
+  if (url) {
+    return (
+      <Image
+        source={{ uri: url }}
+        accessibilityLabel={`${name}'s photo`}
+        style={{
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          borderWidth: 2,
+          borderColor: ring ?? color.accent,
+          backgroundColor: color.surface2,
+        }}
+      />
+    );
+  }
   const initials =
     name
       .split(/[\s@._-]+/)
