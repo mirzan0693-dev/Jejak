@@ -3,6 +3,7 @@ import { Animated, Easing, View } from 'react-native';
 import Svg, { Circle, G, Line, Path, Rect } from 'react-native-svg';
 import type { Device, Profile } from './lib/supabase';
 import { color as theme } from './theme';
+import { EASE_IN_OUT, useReducedMotion } from './motion';
 import { Avatar } from './ui';
 
 export type CarStyle = 'hatchback' | 'sedan' | 'suv' | 'mpv' | 'pickup';
@@ -197,13 +198,23 @@ export function MovingPin({ profile, heading, kmh }: { profile: Profile; heading
   const lines = useRef(new Animated.Value(0)).current;
   const fast = kmh > 70;
 
+  const reduced = useReducedMotion();
+
   useEffect(() => {
+    if (reduced) {
+      // reduce motion: keep the vehicle and speed label, drop the bouncing and moving lines
+      bounce.setValue(0);
+      lines.setValue(0.5);
+      return;
+    }
+    const half = fast ? 160 : 260;
     const b = Animated.loop(
       Animated.sequence([
-        Animated.timing(bounce, { toValue: 1, duration: fast ? 160 : 260, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
-        Animated.timing(bounce, { toValue: 0, duration: fast ? 160 : 260, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+        Animated.timing(bounce, { toValue: 1, duration: half, easing: EASE_IN_OUT, useNativeDriver: true }),
+        Animated.timing(bounce, { toValue: 0, duration: half, easing: EASE_IN_OUT, useNativeDriver: true }),
       ]),
     );
+    // constant motion → linear
     const l = Animated.loop(Animated.timing(lines, { toValue: 1, duration: fast ? 450 : 750, easing: Easing.linear, useNativeDriver: true }));
     b.start();
     l.start();
@@ -211,7 +222,7 @@ export function MovingPin({ profile, heading, kmh }: { profile: Profile; heading
       b.stop();
       l.stop();
     };
-  }, [fast]);
+  }, [fast, reduced]);
 
   // drawings face right; flip when heading west-ish
   const flip = heading != null && heading > 180 && heading < 360;

@@ -1,7 +1,8 @@
 import { Camera, Map, ViewAnnotation, type CameraRef } from '@maplibre/maplibre-react-native';
 import * as Location from 'expo-location';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert as RNAlert, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert as RNAlert, Animated, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Appear, EASE_IN_OUT, useReducedMotion } from '../motion';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   forgetLocalDevice,
@@ -18,6 +19,7 @@ import { useAppData, type AppData } from '../useData';
 import { BIKE_STYLES, CAR_STYLES, MovingPin, PAINTS, VehicleArt, movingInfo, movingLabel, type Paint } from '../vehicles';
 
 type Tab = 'people' | 'devices' | 'me';
+const TABS: Tab[] = ['people', 'devices', 'me'];
 
 export function Main({ userId }: { userId: string }) {
   const data = useAppData(userId);
@@ -28,6 +30,18 @@ export function Main({ userId }: { userId: string }) {
   const [inviting, setInviting] = useState(false);
   const [localDeviceId, setLocalDeviceId] = useState<string | null>(null);
   const camera = useRef<CameraRef>(null);
+  const reduced = useReducedMotion();
+  const [tabsW, setTabsW] = useState(0);
+  const tabX = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    // the highlight slides to the tapped tab: on-screen movement, so ease-in-out, kept short because tabs are tapped often
+    Animated.timing(tabX, {
+      toValue: (TABS.indexOf(tab) * tabsW) / 3,
+      duration: reduced || !tabsW ? 0 : 220,
+      easing: EASE_IN_OUT,
+      useNativeDriver: true,
+    }).start();
+  }, [tab, tabsW]);
 
   useEffect(() => {
     getLocalDeviceId().then(setLocalDeviceId);
@@ -77,10 +91,15 @@ export function Main({ userId }: { userId: string }) {
               >
                 {(() => {
                   const m = movingInfo(p.device);
+                  // keyed so switching between walking and driving fades the new pin in instead of snapping
                   return m ? (
-                    <MovingPin profile={p.profile} heading={m.heading ?? null} kmh={m.kmh} />
+                    <Appear key="moving">
+                      <MovingPin profile={p.profile} heading={m.heading ?? null} kmh={m.kmh} />
+                    </Appear>
                   ) : (
-                    <Avatar name={displayName(p.profile)} url={p.profile.avatar_url} ring={isStale(p.device.located_at) ? color.textMuted : color.accent} />
+                    <Appear key="still">
+                      <Avatar name={displayName(p.profile)} url={p.profile.avatar_url} ring={isStale(p.device.located_at) ? color.textMuted : color.accent} />
+                    </Appear>
                   );
                 })()}
               </ViewAnnotation>
@@ -109,14 +128,20 @@ export function Main({ userId }: { userId: string }) {
       </View>
 
       <View style={[styles.panel, { paddingBottom: insets.bottom + space.sm }]}>
-        <View style={styles.tabs}>
-          {(['people', 'devices', 'me'] as Tab[]).map((t) => (
+        <View style={styles.tabs} onLayout={(e) => setTabsW(e.nativeEvent.layout.width - 8)}>
+          {tabsW > 0 ? (
+            <Animated.View
+              pointerEvents="none"
+              style={[styles.tabIndicator, { width: tabsW / 3, transform: [{ translateX: tabX }] }]}
+            />
+          ) : null}
+          {TABS.map((t) => (
             <Pressable
               key={t}
               accessibilityRole="tab"
               accessibilityState={{ selected: tab === t }}
               onPress={() => setTab(t)}
-              style={[styles.tab, tab === t && { backgroundColor: color.surface2 }]}
+              style={styles.tab}
             >
               <Text style={{ color: tab === t ? color.text : color.textMuted, fontWeight: '700' }}>
                 {t === 'people' ? 'People' : t === 'devices' ? 'Devices' : 'Me'}
@@ -833,6 +858,7 @@ const styles = StyleSheet.create({
   },
   tabs: { flexDirection: 'row', backgroundColor: color.bg, borderRadius: radius.md, padding: 4 },
   tab: { flex: 1, alignItems: 'center', paddingVertical: space.sm, borderRadius: radius.sm },
+  tabIndicator: { position: 'absolute', top: 4, bottom: 4, left: 4, borderRadius: radius.sm, backgroundColor: color.surface2 },
 });
 
 // ---------- "Tell people when I arrive" ----------

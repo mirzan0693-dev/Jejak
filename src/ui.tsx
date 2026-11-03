@@ -1,9 +1,12 @@
-import { type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, type ReactNode } from 'react';
 import {
   ActivityIndicator,
+  Animated,
+  Dimensions,
   Image,
   KeyboardAvoidingView,
   Modal,
+  PanResponder,
   Platform,
   Pressable,
   ScrollView,
@@ -13,6 +16,7 @@ import {
   View,
   type TextInputProps,
 } from 'react-native';
+import { EASE_DRAWER, EASE_OUT, PressScale, useReducedMotion } from './motion';
 import { color, font, radius, space } from './theme';
 
 type ButtonProps = {
@@ -26,18 +30,17 @@ type ButtonProps = {
 export function Button({ label, onPress, variant = 'primary', loading, disabled }: ButtonProps) {
   const off = disabled || loading;
   return (
-    <Pressable
+    <PressScale
       accessibilityRole="button"
       accessibilityState={{ disabled: off, busy: loading }}
       accessibilityLabel={label}
       onPress={onPress}
       disabled={off}
-      style={({ pressed }) => [
+      style={[
         s.btn,
         variant === 'primary' && { backgroundColor: color.accent },
         variant === 'secondary' && { backgroundColor: color.surface2, borderColor: color.border, borderWidth: 1 },
         variant === 'danger' && { backgroundColor: 'transparent', borderColor: color.danger, borderWidth: 1 },
-        pressed && { opacity: 0.8 },
         off && { opacity: 0.5 },
       ]}
     >
@@ -53,7 +56,7 @@ export function Button({ label, onPress, variant = 'primary', loading, disabled 
           {label}
         </Text>
       )}
-    </Pressable>
+    </PressScale>
   );
 }
 
@@ -157,16 +160,17 @@ export function Avatar({
 
 export function Chip({ label, selected, onPress }: { label: string; selected?: boolean; onPress: () => void }) {
   return (
-    <Pressable
+    <PressScale
       accessibilityRole="button"
       accessibilityState={{ selected }}
       onPress={onPress}
+      scaleTo={0.95}
       style={[s.chip, selected && { backgroundColor: color.accent, borderColor: color.accent }]}
     >
       <Text style={{ color: selected ? color.onAccent : color.text, fontWeight: '600', fontSize: font.small }}>
         {label}
       </Text>
-    </Pressable>
+    </PressScale>
   );
 }
 
@@ -184,10 +188,12 @@ export function Row({
   onPress?: () => void;
 }) {
   return (
-    <Pressable
+    <PressScale
       accessibilityRole={onPress ? 'button' : undefined}
       onPress={onPress}
-      style={({ pressed }) => [s.row, pressed && onPress && { backgroundColor: color.surface2 }]}
+      disabled={!onPress}
+      scaleTo={0.98}
+      style={s.row}
     >
       {left}
       <View style={{ flex: 1, gap: 2 }}>
@@ -201,7 +207,7 @@ export function Row({
         ) : null}
       </View>
       {right}
-    </Pressable>
+    </PressScale>
   );
 }
 
@@ -216,23 +222,60 @@ export function Sheet({
   onClose: () => void;
   children: ReactNode;
 }) {
+  const reduced = useReducedMotion();
+  const offscreen = useRef(Dimensions.get('window').height);
+  const y = useRef(new Animated.Value(offscreen.current)).current;
+
+  useEffect(() => {
+    if (!visible) return;
+    y.setValue(reduced ? 0 : offscreen.current);
+    // slides up on the iOS drawer curve; enter can take its time, exit is quick
+    Animated.timing(y, { toValue: 0, duration: reduced ? 0 : 420, easing: EASE_DRAWER, useNativeDriver: true }).start();
+  }, [visible]);
+
+  const close = useCallback(() => {
+    Animated.timing(y, { toValue: offscreen.current, duration: reduced ? 0 : 200, easing: EASE_OUT, useNativeDriver: true }).start(
+      () => onClose(),
+    );
+  }, [onClose, reduced]);
+
+  // drag the handle down to dismiss: a quick flick is enough, no need to drag far
+  const pan = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) > 4,
+      onPanResponderMove: (_, g) => y.setValue(g.dy > 0 ? g.dy : -Math.sqrt(-g.dy) * 2), // friction past the top
+      onPanResponderRelease: (_, g) => {
+        if (g.dy > 120 || (g.dy > 16 && g.vy > 0.11)) closeRef.current();
+        else Animated.spring(y, { toValue: 0, bounciness: 0, speed: 18, useNativeDriver: true }).start();
+      },
+    }),
+  ).current;
+  const closeRef = useRef(close);
+  closeRef.current = close;
+
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={close} statusBarTranslucent>
       <KeyboardAvoidingView style={s.backdrop} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <Pressable style={{ flex: 1 }} onPress={onClose} accessibilityLabel="Close" />
-        <View style={s.sheet}>
-          <View style={s.sheetHeader}>
-            <T size="title" bold>
-              {title}
-            </T>
-            <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel="Close" hitSlop={12}>
-              <Text style={{ color: color.textMuted, fontSize: font.title }}>✕</Text>
-            </Pressable>
+        <Pressable style={{ flex: 1 }} onPress={close} accessibilityLabel="Close" />
+        <Animated.View
+          style={[s.sheet, { transform: [{ translateY: y }] }]}
+          onLayout={(e) => (offscreen.current = e.nativeEvent.layout.height + 40)}
+        >
+          <View {...pan.panHandlers} style={{ paddingBottom: space.sm }}>
+            <View style={s.grabber} />
+            <View style={s.sheetHeader}>
+              <T size="title" bold>
+                {title}
+              </T>
+              <PressScale onPress={close} accessibilityRole="button" accessibilityLabel="Close" hitSlop={12} scaleTo={0.9}>
+                <Text style={{ color: color.textMuted, fontSize: font.title }}>✕</Text>
+              </PressScale>
+            </View>
           </View>
           <ScrollView contentContainerStyle={{ gap: space.md, paddingBottom: space.xxl }} keyboardShouldPersistTaps="handled">
             {children}
           </ScrollView>
-        </View>
+        </Animated.View>
       </KeyboardAvoidingView>
     </Modal>
   );
@@ -317,5 +360,6 @@ const s = StyleSheet.create({
     borderTopWidth: 1,
     borderColor: color.border,
   },
+  grabber: { alignSelf: 'center', width: 40, height: 5, borderRadius: 3, backgroundColor: color.border, marginBottom: space.md },
   sheetHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: space.md },
 });
