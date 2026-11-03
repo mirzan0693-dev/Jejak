@@ -1,9 +1,9 @@
 import * as Location from 'expo-location';
-import * as Notifications from 'expo-notifications';
 import { useState } from 'react';
-import { Linking, ScrollView, View } from 'react-native';
+import { Linking, Platform, ScrollView, View } from 'react-native';
 import { avatarUrls, pickAndUploadAvatar } from '../lib/avatar';
-import { startBackgroundUpdates } from '../lib/location';
+import { requestAlwaysLocation, startBackgroundUpdates } from '../lib/location';
+import { requestNotificationPermission } from '../lib/notify';
 import { errorText, supabase } from '../lib/supabase';
 import { color, space } from '../theme';
 import { Avatar, Button, Card, Field, T } from '../ui';
@@ -44,15 +44,14 @@ export function Setup({ userId, currentName, onDone }: { userId: string; current
       const { error } = await supabase.from('profiles').update({ display_name: name.trim() }).eq('id', userId);
       if (error) throw error;
 
-      await Notifications.requestPermissionsAsync();
+      await requestNotificationPermission();
 
       const fg = await Location.requestForegroundPermissionsAsync();
       if (!fg.granted) {
         setNeedsSettings(true);
         throw new Error('Location is needed so the people you approve can see where you are.');
       }
-      const bg = await Location.requestBackgroundPermissionsAsync();
-      if (bg.granted) await startBackgroundUpdates();
+      if (await requestAlwaysLocation()) await startBackgroundUpdates();
       onDone();
     } catch (e) {
       setError(errorText(e));
@@ -84,18 +83,37 @@ export function Setup({ userId, currentName, onDone }: { userId: string; current
           Nobody sees your location unless you approve them. You'll always see who can see you, and you can stop sharing
           with one tap.
         </T>
+        {Platform.OS !== 'web' ? (
+          <>
         <T bold>Why we ask for location "all the time"</T>
-        <T muted>
-          So your family sees where you are, and you can find this phone, even when the app is closed. On Android a small
-          notification stays on while sharing is on. If you choose "only while using the app", sharing only updates when the
-          app is open.
-        </T>
+            <T muted>
+              So your family sees where you are, and you can find this phone, even when the app is closed. On Android a small
+              notification stays on while sharing is on. If you choose "only while using the app", sharing only updates when the
+              app is open.
+            </T>
+          </>
+        ) : null}
+        {Platform.OS === 'web' ? (
+          <>
+            <T bold>On iPhone web</T>
+            <T muted>
+              iPhone only lets a web app use location while it's open on screen. Your family sees your last spot when you
+              close Jejak, and "Play sound" only works while it's open.
+            </T>
+          </>
+        ) : null}
         <T bold>Notifications</T>
         <T muted>For arrive and leave alerts, share requests, and the loud sound when you're finding this phone.</T>
       </Card>
       <Button label="Continue" onPress={finish} loading={busy} />
       {error ? <T color={color.danger}>{error}</T> : null}
-      {needsSettings ? <Button label="Open phone settings" variant="secondary" onPress={() => Linking.openSettings()} /> : null}
+      {needsSettings ? (
+        Platform.OS === 'web' ? (
+          <T muted>Allow location for this site: Settings → Apps → Safari → Location → Ask or Allow, then reopen Jejak.</T>
+        ) : (
+          <Button label="Open phone settings" variant="secondary" onPress={() => Linking.openSettings()} />
+        )
+      ) : null}
     </ScrollView>
   );
 }

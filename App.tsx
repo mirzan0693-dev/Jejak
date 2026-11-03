@@ -1,10 +1,10 @@
 import type { Session } from '@supabase/supabase-js';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, AppState, View } from 'react-native';
+import { ActivityIndicator, AppState, Platform, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { listenForAuthLinks } from './src/lib/authLink';
-import { ensureDeviceRegistered, reportNow, runPendingCommands } from './src/lib/location';
+import { ensureDeviceRegistered, reportNow, runPendingCommands, startBackgroundUpdates } from './src/lib/location';
 import { setupNotificationChannels } from './src/lib/notify';
 import { isConfigured, supabase } from './src/lib/supabase';
 import { Main } from './src/screens/Main';
@@ -51,6 +51,8 @@ export default function App() {
         // first time on this phone: show setup
         const { status } = await import('expo-location').then((L) => L.getForegroundPermissionsAsync());
         setSetupDone(status === 'granted');
+        // web can't track in the background, so start following the position each time the app opens
+        if (status === 'granted' && Platform.OS === 'web') startBackgroundUpdates().catch(() => {});
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Could not reach the server.');
       }

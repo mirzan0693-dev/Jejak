@@ -1,13 +1,15 @@
-import { Camera, Map, Marker, ViewAnnotation, type CameraRef } from '@maplibre/maplibre-react-native';
-import * as Location from 'expo-location';
+import { Camera, Map, Marker, ViewAnnotation, type CameraRef } from '../map';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert as RNAlert, Animated, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert as RNAlert, Animated, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { confirmAction, showMessage } from '../lib/confirm';
 import { Appear, EASE_IN_OUT, EASE_OUT, Pop, animateNextLayout, useGlidingLngLat, useReducedMotion } from '../motion';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   forgetLocalDevice,
   getLocalDeviceId,
+  isSharingOn,
   reportNow,
+  requestAlwaysLocation,
   startBackgroundUpdates,
   stopBackgroundUpdates,
 } from '../lib/location';
@@ -232,7 +234,7 @@ function PeopleTab({
 
   async function respond(id: string, accept: boolean) {
     const { error } = await supabase.rpc('respond_share', { share_id: id, accept });
-    if (error) RNAlert.alert('Could not answer', errorText(error));
+    if (error) showMessage('Could not answer', errorText(error));
     refresh();
   }
   async function cancel(id: string) {
@@ -393,18 +395,11 @@ function PersonSheet({
   }
 
   function stopSeeing() {
-    RNAlert.alert('Stop seeing their location?', `You'll need to ask ${displayName(p!.profile)} again to see it.`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Stop',
-        style: 'destructive',
-        onPress: async () => {
-          await supabase.rpc('end_share', { share_id: p!.share.id });
-          data.refresh();
-          onClose();
-        },
-      },
-    ]);
+    confirmAction('Stop seeing their location?', `You'll need to ask ${displayName(p!.profile)} again to see it.`, 'Stop', async () => {
+      await supabase.rpc('end_share', { share_id: p!.share.id });
+      data.refresh();
+      onClose();
+    });
   }
 
   const d = p.device;
@@ -566,17 +561,10 @@ function DeviceSheet({
   }
 
   function remove() {
-    RNAlert.alert('Remove this device?', 'It will stop showing here. Sign in on it again to add it back.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Remove',
-        style: 'destructive',
-        onPress: async () => {
-          await supabase.from('devices').delete().eq('id', device!.id);
-          onClose();
-        },
-      },
-    ]);
+    confirmAction('Remove this device?', 'It will stop showing here. Sign in on it again to add it back.', 'Remove', async () => {
+      await supabase.from('devices').delete().eq('id', device!.id);
+      onClose();
+    });
   }
 
   return (
@@ -621,15 +609,18 @@ function MeTab({ data, view, myPhone, userId }: { data: AppData; view: View_; my
   const [name, setName] = useState(data.me?.display_name ?? '');
 
   useEffect(() => {
-    Location.hasStartedLocationUpdatesAsync('jejak-location-updates')
+    isSharingOn()
       .then((on) => setPaused(!on))
       .catch(() => setPaused(true));
   }, []);
 
   async function toggleSharing() {
     if (paused) {
-      const bg = await Location.requestBackgroundPermissionsAsync();
-      if (!bg.granted) {
+      if (!(await requestAlwaysLocation())) {
+        if (Platform.OS === 'web') {
+          showMessage('Location is off', 'Allow location for this site in Settings → Apps → Safari → Location, then reopen Jejak.');
+          return;
+        }
         RNAlert.alert('Location "all the time" is off', 'Turn it on in your phone settings so sharing works when the app is closed.', [
           { text: 'Not now', style: 'cancel' },
           { text: 'Open settings', onPress: () => Linking.openSettings() },
@@ -652,17 +643,10 @@ function MeTab({ data, view, myPhone, userId }: { data: AppData; view: View_; my
   }
 
   async function stopSharingWith(shareId: string, who: string) {
-    RNAlert.alert(`Stop sharing with ${who}?`, 'They will no longer see where you are.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Stop sharing',
-        style: 'destructive',
-        onPress: async () => {
-          await supabase.rpc('end_share', { share_id: shareId });
-          data.refresh();
-        },
-      },
-    ]);
+    confirmAction(`Stop sharing with ${who}?`, 'They will no longer see where you are.', 'Stop sharing', async () => {
+      await supabase.rpc('end_share', { share_id: shareId });
+      data.refresh();
+    });
   }
 
   async function saveName() {
@@ -677,7 +661,7 @@ function MeTab({ data, view, myPhone, userId }: { data: AppData; view: View_; my
     try {
       if (await pickAndUploadAvatar(userId, data.me?.avatar_path)) await data.refresh();
     } catch (e) {
-      RNAlert.alert('Could not save photo', errorText(e));
+      showMessage('Could not save photo', errorText(e));
     } finally {
       setPhotoBusy(false);
     }
@@ -694,19 +678,12 @@ function MeTab({ data, view, myPhone, userId }: { data: AppData; view: View_; my
   }
 
   function deleteAccount() {
-    RNAlert.alert('Delete your account?', 'This removes your account, your devices and every share. It cannot be undone.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          const { error } = await supabase.rpc('delete_my_account');
-          if (error) return RNAlert.alert('Could not delete', errorText(error));
-          await forgetLocalDevice();
-          await supabase.auth.signOut();
-        },
-      },
-    ]);
+    confirmAction('Delete your account?', 'This removes your account, your devices and every share. It cannot be undone.', 'Delete', async () => {
+      const { error } = await supabase.rpc('delete_my_account');
+      if (error) return showMessage('Could not delete', errorText(error));
+      await forgetLocalDevice();
+      await supabase.auth.signOut();
+    });
   }
 
   return (
@@ -767,7 +744,9 @@ function MeTab({ data, view, myPhone, userId }: { data: AppData; view: View_; my
         <T muted>
           {paused
             ? 'Paused: people see your last location as old. Find-my-phone only works while the app is open.'
-            : 'On: updates about every 5 minutes or when you move.'}
+            : Platform.OS === 'web'
+              ? 'On while Jejak is open. iPhone stops web apps using location once you close it or lock the phone.'
+              : 'On: updates about every minute while you move.'}
         </T>
       </Card>
 

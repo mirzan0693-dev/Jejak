@@ -77,3 +77,7 @@ export async function showAlert(body: string) {
     trigger: Platform.OS === 'android' ? { channelId: CH_ALERTS } : null,
   });
 }
+
+export async function requestNotificationPermission() {
+  await Notifications.requestPermissionsAsync().catch(() => {});
+}

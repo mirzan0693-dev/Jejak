@@ -37,6 +37,26 @@ Open `eas.json` and replace both `PASTE_YOUR_SUPABASE_URL` and both `PASTE_YOUR_
 4. The app works for **7 days**. Before it expires, plug in and press Start in Sideloadly again (your data stays).
    Free Apple IDs allow 3 sideloaded apps at once.
 
+## 3c. iPhone without a developer account: the web app (Add to Home Screen)
+
+Jejak also runs as a web app. On iPhone you add it to your home screen and it opens full screen like an app.
+**Limit:** iPhone only lets web apps use location while they're open on screen, so your family sees your last spot
+once you close it, and "Play sound" only works while it's open.
+
+One-time hosting (free, from your phone):
+1. Go to https://vercel.com → **Continue with GitHub**.
+2. **Add New → Project** → pick **Jejak** → **Deploy** (settings are already in `vercel.json`).
+3. Copy your site address, e.g. `https://jejak-xyz.vercel.app`.
+4. Supabase → **Authentication → URL Configuration → Redirect URLs** → add `https://jejak-xyz.vercel.app/**` (your exact address).
+
+On the iPhone:
+1. Open your site address in **Safari** (not Chrome).
+2. Tap **Share** → **Add to Home Screen** → **Add**.
+3. Open **Jejak** from the home screen, sign in, and allow location and notifications.
+   Sign in from the home-screen app itself, then open the email link: if it opens in Safari instead, sign in again from there and reopen the home-screen app.
+
+Every push to GitHub updates the site automatically.
+
 ## 3b. Alternative: build with EAS — on your computer
 
 1. Install Node.js LTS from https://nodejs.org

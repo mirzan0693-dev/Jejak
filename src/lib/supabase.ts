@@ -1,9 +1,13 @@
 import 'react-native-url-polyfill/auto';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient } from '@supabase/supabase-js';
+import { Platform } from 'react-native';
 
-const url = process.env.EXPO_PUBLIC_SUPABASE_URL;
-const anonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+// The anon key is public by design: the database's row-level security decides what each person can see.
+const url = process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://wmxechxoqcimgvwmdvgn.supabase.co';
+const anonKey =
+  process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ||
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndteGVjaHhvcWNpbWd2d21kdmduIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTM3MDc2NzcsImV4cCI6MjEwOTI4MzY3N30.mZzEyKTRtDw8LQuomrR18_lqM1ExI2BiVQbzFNLX54E';
 
 export const isConfigured = Boolean(url && anonKey);
 
@@ -12,7 +16,7 @@ export const supabase = createClient(url ?? 'https://not-configured.supabase.co'
     storage: AsyncStorage,
     autoRefreshToken: true,
     persistSession: true,
-    detectSessionInUrl: false,
+    detectSessionInUrl: Platform.OS === 'web', // web: the sign-in link lands back on this page
   },
 });
 

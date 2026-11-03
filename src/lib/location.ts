@@ -27,13 +27,16 @@ export async function ensureDeviceRegistered(userId: string): Promise<string> {
     .select('id', { count: 'exact', head: true })
     .eq('user_id', userId)
     .eq('is_sharing_device', true);
-  const name = Device.deviceName || Device.modelName || (Platform.OS === 'ios' ? 'iPhone' : 'Android phone');
+  const name =
+    Platform.OS === 'web'
+      ? `${/iPhone|iPad/.test(navigator.userAgent) ? 'iPhone' : 'Browser'} (web app)`
+      : Device.deviceName || Device.modelName || (Platform.OS === 'ios' ? 'iPhone' : 'Android phone');
   const { data, error } = await supabase
     .from('devices')
     .insert({
       user_id: userId,
       name,
-      platform: Platform.OS === 'ios' ? 'ios' : 'android',
+      platform: Platform.OS === 'web' ? 'web' : Platform.OS === 'ios' ? 'ios' : 'android',
       is_sharing_device: !count, // first phone on the account shares your location
     })
     .select('id')
@@ -125,7 +128,24 @@ export async function runPendingCommands() {
   await handleCommands((data ?? []) as Command[]);
 }
 
+// Web (iPhone home-screen app): no background tracking exists, so follow the position while the app is open.
+let webWatch: Location.LocationSubscription | null = null;
+let webLastSent = 0;
+
 export async function startBackgroundUpdates() {
+  if (Platform.OS === 'web') {
+    if (webWatch) return;
+    webWatch = await Location.watchPositionAsync(
+      { accuracy: Location.Accuracy.Balanced, distanceInterval: 50, timeInterval: 60 * 1000 },
+      (loc) => {
+        // the browser can fire often; send at most every 30 s
+        if (Date.now() - webLastSent < 30_000) return;
+        webLastSent = Date.now();
+        reportPosition(loc.coords).catch(() => {});
+      },
+    );
+    return;
+  }
   const started = await Location.hasStartedLocationUpdatesAsync(LOCATION_TASK).catch(() => false);
   if (started) return;
   await Location.startLocationUpdatesAsync(LOCATION_TASK, {
@@ -145,12 +165,28 @@ export async function startBackgroundUpdates() {
 }
 
 export async function stopBackgroundUpdates() {
+  if (Platform.OS === 'web') {
+    webWatch?.remove();
+    webWatch = null;
+    return;
+  }
   const started = await Location.hasStartedLocationUpdatesAsync(LOCATION_TASK).catch(() => false);
   if (started) await Location.stopLocationUpdatesAsync(LOCATION_TASK);
 }
 
+export async function isSharingOn() {
+  if (Platform.OS === 'web') return webWatch != null;
+  return Location.hasStartedLocationUpdatesAsync(LOCATION_TASK).catch(() => false);
+}
+
+/** "All the time" location on phones; on web, while-open location is all there is. */
+export async function requestAlwaysLocation() {
+  if (Platform.OS === 'web') return (await Location.requestForegroundPermissionsAsync()).granted;
+  return (await Location.requestBackgroundPermissionsAsync()).granted;
+}
+
 // Must be defined at startup (imported from index.ts), not inside a component.
-TaskManager.defineTask<{ locations: Location.LocationObject[] }>(LOCATION_TASK, async ({ data, error }) => {
+if (Platform.OS !== 'web') TaskManager.defineTask<{ locations: Location.LocationObject[] }>(LOCATION_TASK, async ({ data, error }) => {
   if (error || !data?.locations?.length) return;
   const last = data.locations[data.locations.length - 1];
   try {

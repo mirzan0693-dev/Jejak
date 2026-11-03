@@ -52,6 +52,14 @@
       ],
       "@maplibre/maplibre-react-native",
       "expo-dev-client"
-    ]
+    ],
+    "web": {
+      "bundler": "metro",
+      "output": "single",
+      "name": "Jejak",
+      "shortName": "Jejak",
+      "favicon": "./public/icon-192.png",
+      "backgroundColor": "#0F1416"
+    }
   }
 }

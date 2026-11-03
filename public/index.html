@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="%LANG_ISO_CODE%">
+  <head>
+    <meta charset="utf-8" />
+    <!-- viewport-fit=cover: paint under the notch and home bar, then pad content with env(safe-area-inset-*).
+         interactive-widget: the keyboard shrinks the layout so bottom inputs stay visible. Zoom stays enabled. -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content"
+    />
+    <title>%WEB_TITLE%</title>
+
+    <!-- Add to Home Screen: open full screen, status bar over our dark header -->
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Jejak" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
+    <!-- the app is dark in both schemes, so the status bar matches its header either way -->
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#0F1416" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0F1416" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="format-detection" content="telephone=no" />
+
+    <style id="expo-reset">
+      html {
+        -webkit-tap-highlight-color: transparent; /* no grey flash on tap; every control has its own press state */
+        -webkit-text-size-adjust: 100%; /* no font inflation in landscape */
+        overscroll-behavior: none; /* no pull-to-refresh or page rubber band behind the map and sheets */
+        background: #0f1416;
+      }
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        background: #0f1416;
+        color-scheme: dark;
+      }
+      body {
+        overflow: hidden;
+        overscroll-behavior: none;
+      }
+      /* track the visible area as Safari's bars show and hide; 100vh would sit under the URL bar */
+      #root {
+        display: flex;
+        height: 100%;
+        height: 100dvh;
+        flex: 1;
+      }
+      /* inner scroll areas keep their own bounce but never drag the page */
+      [data-jejak-scroll],
+      div[style*='overflow-y: auto'],
+      div[style*='overflow: auto'] {
+        overscroll-behavior: contain;
+      }
+      /* controls: tap fires immediately, no text selection or callout on long-press. Content text stays selectable. */
+      [role='button'],
+      [role='tab'],
+      button,
+      a {
+        touch-action: manipulation;
+        user-select: none;
+        -webkit-user-select: none;
+        -webkit-touch-callout: none;
+      }
+      /* iOS zooms into any input under 16px and never zooms back */
+      input,
+      textarea,
+      select {
+        font-size: 16px !important;
+      }
+      /* the map owns its own pinch and pan */
+      .maplibregl-canvas-container,
+      .maplibregl-canvas {
+        touch-action: none;
+      }
+      .maplibregl-ctrl-attrib {
+        font-size: 10px;
+      }
+    </style>
+  </head>
+
+  <body>
+    <noscript>You need to enable JavaScript to run Jejak.</noscript>
+    <div id="root"></div>
+  </body>
+</html>

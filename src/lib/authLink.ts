@@ -1,8 +1,9 @@
 import * as Linking from 'expo-linking';
+import { Platform } from 'react-native';
 import { supabase } from './supabase';
 
 // The sign-in email link opens Supabase, which then sends the person back into the app here.
-export const AUTH_REDIRECT = 'jejak://auth';
+export const AUTH_REDIRECT = Platform.OS === 'web' ? `${window.location.origin}/` : 'jejak://auth';
 
 /** Signs in from a jejak://auth link. Handles both token styles Supabase may send. */
 export async function handleAuthLink(url: string | null): Promise<string | null> {
