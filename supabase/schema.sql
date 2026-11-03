@@ -1,4 +1,4 @@
--- Jejak database. Paste the whole file into Supabase → SQL Editor → Run.
+-- Jejak database (already applied to project wmxechxoqcimgvwmdvgn). For a new project: paste into SQL Editor → Run.
 -- Safe to run once on a new project.
 
 create extension if not exists pgcrypto;
@@ -367,3 +367,15 @@ grant execute on function public.create_share(text, text, timestamptz),
 
 -- ---------- realtime ----------
 alter publication supabase_realtime add table public.devices, public.shares, public.alerts, public.commands;
+
+-- ---------- lock down internal functions ----------
+revoke all on all tables in schema public from anon;
+revoke execute on function public.create_share(text, text, timestamptz), public.respond_share(uuid, boolean),
+  public.end_share(uuid), public.delete_my_account(),
+  public.report_location(uuid, double precision, double precision, real, real) from anon, public;
+revoke execute on function public.apply_command(), public.check_geofences(), public.cleanup_after_share(),
+  public.handle_new_user(), public.notify_found(), public.notify_geofence_subject(),
+  public.touch_updated_at()
+  from public, anon, authenticated;
+revoke execute on function public.can_view(uuid), public.is_connected(uuid) from public, anon;
+grant execute on function public.can_view(uuid), public.is_connected(uuid) to authenticated;
