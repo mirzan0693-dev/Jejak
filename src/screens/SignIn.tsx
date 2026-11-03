@@ -1,26 +1,34 @@
 import { useState } from 'react';
 import { View } from 'react-native';
+import { AUTH_REDIRECT } from '../lib/authLink';
 import { errorText, supabase } from '../lib/supabase';
 import { color, space } from '../theme';
 import { Button, Card, Field, T } from '../ui';
 
-export function SignIn() {
+export function SignIn({ linkError }: { linkError?: string | null }) {
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
-  const [step, setStep] = useState<'email' | 'code'>('email');
+  const [step, setStep] = useState<'email' | 'sent'>('email');
+  const [showCode, setShowCode] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const cleanEmail = email.trim().toLowerCase();
 
-  async function sendCode() {
+  async function send() {
     setError(null);
     if (!/^\S+@\S+\.\S+$/.test(cleanEmail)) return setError('Enter a valid email address.');
     setBusy(true);
-    const { error } = await supabase.auth.signInWithOtp({ email: cleanEmail, options: { shouldCreateUser: true } });
+    const { error } = await supabase.auth.signInWithOtp({
+      email: cleanEmail,
+      options: { shouldCreateUser: true, emailRedirectTo: AUTH_REDIRECT },
+    });
     setBusy(false);
-    if (error) return setError(errorText(error));
-    setStep('code');
+    if (error) {
+      const msg = errorText(error);
+      return setError(/rate|too many|seconds/i.test(msg) ? 'Too many emails sent. Wait a minute and try again.' : msg);
+    }
+    setStep('sent');
   }
 
   async function verify() {
@@ -28,7 +36,7 @@ export function SignIn() {
     setBusy(true);
     const { error } = await supabase.auth.verifyOtp({ email: cleanEmail, token: code.trim(), type: 'email' });
     setBusy(false);
-    if (error) setError('That code did not work. Check it, or send a new one.');
+    if (error) setError('That code did not work. Check it, or send a new email.');
   }
 
   return (
@@ -51,25 +59,34 @@ export function SignIn() {
               autoComplete="email"
               placeholder="you@example.com"
             />
-            <Button label="Send me a code" onPress={sendCode} loading={busy} />
+            <Button label="Email me a sign-in link" onPress={send} loading={busy} />
           </>
         ) : (
           <>
-            <T muted>We emailed a code to {cleanEmail}.</T>
-            <Field
-              label="Code"
-              value={code}
-              onChangeText={setCode}
-              keyboardType="number-pad"
-              autoComplete="one-time-code"
-              placeholder="123456"
-              maxLength={10}
-            />
-            <Button label="Sign in" onPress={verify} loading={busy} disabled={code.trim().length < 6} />
-            <Button label="Use a different email" variant="secondary" onPress={() => setStep('email')} />
+            <T bold>Check your email</T>
+            <T muted>
+              We sent a sign-in link to {cleanEmail}. Open the email on this phone and tap the link — it opens Jejak and signs
+              you in. Check spam if you don't see it.
+            </T>
+            {showCode ? (
+              <>
+                <Field
+                  label="Code from the email"
+                  value={code}
+                  onChangeText={setCode}
+                  keyboardType="number-pad"
+                  autoComplete="one-time-code"
+                  maxLength={10}
+                />
+                <Button label="Sign in with code" onPress={verify} loading={busy} disabled={code.trim().length < 6} />
+              </>
+            ) : (
+              <Button label="My email has a code instead" variant="secondary" onPress={() => setShowCode(true)} />
+            )}
+            <Button label="Send again / different email" variant="secondary" onPress={() => setStep('email')} />
           </>
         )}
-        {error ? <T color={color.danger}>{error}</T> : null}
+        {error || linkError ? <T color={color.danger}>{error || linkError}</T> : null}
       </Card>
     </View>
   );

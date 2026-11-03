@@ -3,6 +3,7 @@
     "name": "Jejak",
     "slug": "jejak",
     "version": "1.0.0",
+    "scheme": "jejak",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",

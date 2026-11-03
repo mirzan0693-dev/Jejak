@@ -3,6 +3,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, AppState, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { listenForAuthLinks } from './src/lib/authLink';
 import { ensureDeviceRegistered, reportNow, runPendingCommands } from './src/lib/location';
 import { setupNotificationChannels } from './src/lib/notify';
 import { isConfigured, supabase } from './src/lib/supabase';
@@ -26,6 +27,9 @@ export default function App() {
   const [setupDone, setSetupDone] = useState<boolean | null>(null);
   const [profileName, setProfileName] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [linkError, setLinkError] = useState<string | null>(null);
+
+  useEffect(() => listenForAuthLinks(setLinkError), []);
 
   useEffect(() => {
     setupNotificationChannels().catch(() => {});
@@ -74,7 +78,7 @@ export default function App() {
       </Centered>
     );
   } else if (!session) {
-    screen = <SignIn />;
+    screen = <SignIn linkError={linkError} />;
   } else if (!setupDone) {
     screen = <Setup userId={session.user.id} currentName={profileName} onDone={() => setSetupDone(true)} />;
   } else {
