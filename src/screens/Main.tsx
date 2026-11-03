@@ -15,6 +15,7 @@ import { displayName, errorText, supabase, type Device, type Profile, type Share
 import { color, font, MAP_STYLE, radius, space } from '../theme';
 import { Avatar, Button, Card, Chip, Field, Row, Sheet, T, distanceText, isStale, timeAgo } from '../ui';
 import { useAppData, type AppData } from '../useData';
+import { BIKE_STYLES, CAR_STYLES, MovingPin, PAINTS, VehicleArt, movingInfo, movingLabel, type Paint } from '../vehicles';
 
 type Tab = 'people' | 'devices' | 'me';
 
@@ -74,7 +75,14 @@ export function Main({ userId }: { userId: string }) {
                 lngLat={[p.device.lng, p.device.lat]}
                 onPress={() => setPerson(p.profile.id)}
               >
-                <Avatar name={displayName(p.profile)} url={p.profile.avatar_url} ring={isStale(p.device.located_at) ? color.textMuted : color.accent} />
+                {(() => {
+                  const m = movingInfo(p.device);
+                  return m ? (
+                    <MovingPin profile={p.profile} heading={m.heading ?? null} kmh={m.kmh} />
+                  ) : (
+                    <Avatar name={displayName(p.profile)} url={p.profile.avatar_url} ring={isStale(p.device.located_at) ? color.textMuted : color.accent} />
+                  );
+                })()}
               </ViewAnnotation>
             ) : null,
           )}
@@ -182,7 +190,7 @@ function derive(data: AppData, me: string) {
       .filter((s) => s.status === 'pending' && s.requested_by === me)
       .map((s) => ({ share: s, other: prof(s.owner_id === me ? s.viewer_id : s.owner_id) })),
     myDevices: data.devices.filter((d) => d.user_id === me),
-    alertsOnMe: data.geofences.filter((g) => g.subject_id === me),
+    alertsOnMe: data.geofences.filter((g) => g.subject_id === me && g.created_by !== me),
   };
 }
 type View_ = ReturnType<typeof derive>;
@@ -244,7 +252,9 @@ function PeopleTab({
           key={p.profile.id}
           left={<Avatar name={displayName(p.profile)} url={p.profile.avatar_url} ring={isStale(p.device?.located_at ?? null) ? color.textMuted : color.accent} />}
           title={displayName(p.profile)}
-          subtitle={[timeAgo(p.device?.located_at ?? null), distanceText(myPhone, p.device)].filter(Boolean).join(' · ')}
+          subtitle={[movingLabel(p.profile, p.device) ?? timeAgo(p.device?.located_at ?? null), distanceText(myPhone, p.device)]
+            .filter(Boolean)
+            .join(' · ')}
           onPress={() => onOpen(p.profile.id)}
         />
       ))}
@@ -358,6 +368,7 @@ function PersonSheet({
     const { error } = await supabase.from('geofences').insert({
       watcher_id: userId,
       subject_id: p!.profile.id,
+      created_by: userId,
       name: placeName.trim(),
       lat: src.lat,
       lng: src.lng,
@@ -418,7 +429,7 @@ function PersonSheet({
         <Row
           key={g.id}
           title={`When they ${g.trigger === 'arrive' ? 'arrive at' : 'leave'} ${g.name}`}
-          subtitle={`Within ${g.radius_m} m`}
+          subtitle={g.created_by === g.subject_id ? `Set by ${displayName(p.profile)} · within ${g.radius_m} m` : `Within ${g.radius_m} m`}
           right={
             <Pressable onPress={() => removeFence(g.id)} accessibilityRole="button">
               <Text style={{ color: color.danger, fontWeight: '600' }}>Remove</Text>
@@ -724,6 +735,10 @@ function MeTab({ data, view, myPhone, userId }: { data: AppData; view: View_; my
         ))}
       </Card>
 
+      <SendAlertsCard data={data} view={view} myPhone={myPhone} userId={userId} />
+
+      <VehicleCard data={data} userId={userId} />
+
       <Card>
         <T bold>This phone</T>
         {myPhone && !myPhone.is_sharing_device ? (
@@ -819,3 +834,178 @@ const styles = StyleSheet.create({
   tabs: { flexDirection: 'row', backgroundColor: color.bg, borderRadius: radius.md, padding: 4 },
   tab: { flex: 1, alignItems: 'center', paddingVertical: space.sm, borderRadius: radius.sm },
 });
+
+// ---------- "Tell people when I arrive" ----------
+
+function SendAlertsCard({ data, view, myPhone, userId }: { data: AppData; view: View_; myPhone: Device | null; userId: string }) {
+  const [open, setOpen] = useState(false);
+  const [who, setWho] = useState<string[]>([]);
+  const [trigger, setTrigger] = useState<'arrive' | 'leave'>('arrive');
+  const [placeName, setPlaceName] = useState('');
+  const [radiusM, setRadiusM] = useState(150);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const mine = data.geofences.filter((g) => g.subject_id === userId && g.created_by === userId);
+
+  async function save() {
+    setError(null);
+    if (!who.length) return setError('Choose who to tell.');
+    if (!placeName.trim()) return setError('Give the place a name, e.g. Home or Office.');
+    if (myPhone?.lat == null || myPhone.lng == null) return setError("Your location isn't known yet. Try again in a moment.");
+    setBusy(true);
+    const rows = who.map((w) => ({
+      watcher_id: w,
+      subject_id: userId,
+      created_by: userId,
+      name: placeName.trim(),
+      lat: myPhone.lat!,
+      lng: myPhone.lng!,
+      radius_m: radiusM,
+      trigger,
+    }));
+    const { error } = await supabase.from('geofences').insert(rows);
+    setBusy(false);
+    if (error) return setError(errorText(error));
+    setOpen(false);
+    setWho([]);
+    setPlaceName('');
+    data.refresh();
+  }
+
+  return (
+    <Card>
+      <T bold>Tell people when I arrive</T>
+      <T muted>Stand at the place (home, office, school), then choose who gets a notification when you arrive or leave.</T>
+      {mine.map((g) => (
+        <Row
+          key={g.id}
+          title={`${displayName(data.profiles[g.watcher_id])} · when I ${g.trigger === 'arrive' ? 'arrive at' : 'leave'} ${g.name}`}
+          subtitle={`Within ${g.radius_m} m`}
+          right={
+            <Pressable
+              onPress={async () => {
+                await supabase.from('geofences').delete().eq('id', g.id);
+                data.refresh();
+              }}
+              accessibilityRole="button"
+            >
+              <Text style={{ color: color.danger, fontWeight: '600' }}>Turn off</Text>
+            </Pressable>
+          }
+        />
+      ))}
+      {view.watchers.length === 0 ? (
+        <T muted>Share your location with someone first — then you can notify them.</T>
+      ) : open ? (
+        <>
+          <T muted>Who to tell</T>
+          <View style={{ flexDirection: 'row', gap: space.sm, flexWrap: 'wrap' }}>
+            {view.watchers.map((w) => (
+              <Chip
+                key={w.profile.id}
+                label={displayName(w.profile)}
+                selected={who.includes(w.profile.id)}
+                onPress={() => setWho((cur) => (cur.includes(w.profile.id) ? cur.filter((x) => x !== w.profile.id) : [...cur, w.profile.id]))}
+              />
+            ))}
+          </View>
+          <View style={{ flexDirection: 'row', gap: space.sm }}>
+            <Chip label="When I arrive" selected={trigger === 'arrive'} onPress={() => setTrigger('arrive')} />
+            <Chip label="When I leave" selected={trigger === 'leave'} onPress={() => setTrigger('leave')} />
+          </View>
+          <Field label="Name of this place" value={placeName} onChangeText={setPlaceName} placeholder="Home" />
+          <View style={{ flexDirection: 'row', gap: space.sm }}>
+            {[150, 500, 1000].map((r) => (
+              <Chip key={r} label={r < 1000 ? `${r} m` : '1 km'} selected={radiusM === r} onPress={() => setRadiusM(r)} />
+            ))}
+          </View>
+          <T muted>Uses where you are right now as the place.</T>
+          <Button label="Turn on" onPress={save} loading={busy} />
+          <Button label="Cancel" variant="secondary" onPress={() => setOpen(false)} />
+          {error ? <T color={color.danger}>{error}</T> : null}
+        </>
+      ) : (
+        <Button label="+ Add" variant="secondary" onPress={() => setOpen(true)} />
+      )}
+    </Card>
+  );
+}
+
+// ---------- vehicle picker ----------
+
+function VehicleCard({ data, userId }: { data: AppData; userId: string }) {
+  const me = data.me;
+  const [saving, setSaving] = useState(false);
+  if (!me) return null;
+
+  async function set(patch: Partial<Profile>) {
+    setSaving(true);
+    await supabase.from('profiles').update(patch).eq('id', userId);
+    await data.refresh();
+    setSaving(false);
+  }
+
+  const kind = me.active_vehicle === 'motorbike' ? 'motorbike' : 'car';
+  const styles_ = kind === 'car' ? CAR_STYLES : BIKE_STYLES;
+  const curStyle = kind === 'car' ? me.car_style ?? 'sedan' : me.bike_style ?? 'kapcai';
+  const curPaint = ((kind === 'car' ? me.car_color : me.bike_color) ?? 'blue') as Paint;
+
+  return (
+    <Card>
+      <T bold>My vehicle</T>
+      <T muted>When you're moving faster than walking, your pin on everyone's map turns into this.</T>
+      <View style={{ flexDirection: 'row', gap: space.sm }}>
+        <Chip label="Car" selected={kind === 'car'} onPress={() => set({ active_vehicle: 'car' })} />
+        <Chip label="Motorbike / bicycle" selected={kind === 'motorbike'} onPress={() => set({ active_vehicle: 'motorbike' })} />
+      </View>
+      <View style={{ alignItems: 'center', paddingVertical: space.sm, opacity: saving ? 0.6 : 1 }}>
+        <VehicleArt kind={kind} style={curStyle} paint={curPaint} width={128} />
+      </View>
+      <View style={{ flexDirection: 'row', gap: space.sm, flexWrap: 'wrap' }}>
+        {styles_.map((st) => (
+          <Pressable
+            key={st.id}
+            accessibilityRole="button"
+            accessibilityState={{ selected: curStyle === st.id }}
+            accessibilityLabel={st.label}
+            onPress={() => set(kind === 'car' ? { car_style: st.id } : { bike_style: st.id })}
+            style={{
+              alignItems: 'center',
+              padding: space.xs,
+              borderRadius: radius.md,
+              borderWidth: 1,
+              borderColor: curStyle === st.id ? color.accent : color.border,
+              backgroundColor: color.surface2,
+              width: 76,
+            }}
+          >
+            <VehicleArt kind={kind} style={st.id} paint={curPaint} width={60} />
+            <Text style={{ color: color.text, fontSize: 11, fontWeight: '600' }}>{st.label}</Text>
+          </Pressable>
+        ))}
+      </View>
+      <T muted>Colour</T>
+      <View style={{ flexDirection: 'row', gap: space.sm, flexWrap: 'wrap' }}>
+        {(Object.keys(PAINTS) as Paint[]).map((c) => (
+          <Pressable
+            key={c}
+            accessibilityRole="button"
+            accessibilityLabel={c}
+            accessibilityState={{ selected: curPaint === c }}
+            onPress={() => set(kind === 'car' ? { car_color: c } : { bike_color: c })}
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: 16,
+              backgroundColor: PAINTS[c],
+              borderWidth: curPaint === c ? 3 : 1,
+              borderColor: curPaint === c ? color.accent : color.border,
+            }}
+          />
+        ))}
+      </View>
+      <T muted>Switch between Car and Motorbike before you set off — the phone can't tell which one you're on.</T>
+    </Card>
+  );
+}

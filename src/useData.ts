@@ -33,7 +33,7 @@ export function useAppData(userId: string): AppData {
     busy.current = true;
     try {
       const [p, sh, d, g, a] = await Promise.all([
-        supabase.from('profiles').select('id, email, display_name, avatar_path'),
+        supabase.from('profiles').select('id, email, display_name, avatar_path, active_vehicle, car_style, car_color, bike_style, bike_color'),
         supabase.from('shares').select('*'),
         supabase.from('devices').select('*').order('created_at'),
         supabase.from('geofences').select('*').eq('active', true),

@@ -85,7 +85,13 @@ export async function deliverNewAlerts() {
 }
 
 /** Upload one position, then act on any pending commands for this phone. */
-export async function reportPosition(pos: { latitude: number; longitude: number; accuracy: number | null }) {
+export async function reportPosition(pos: {
+  latitude: number;
+  longitude: number;
+  accuracy: number | null;
+  speed?: number | null;
+  heading?: number | null;
+}) {
   const deviceId = await AsyncStorage.getItem(DEVICE_KEY);
   if (!deviceId) return;
   const { data: session } = await supabase.auth.getSession();
@@ -96,6 +102,8 @@ export async function reportPosition(pos: { latitude: number; longitude: number;
     p_lng: pos.longitude,
     p_accuracy: pos.accuracy ?? null,
     p_battery: await batteryLevel(),
+    p_speed: pos.speed != null && pos.speed >= 0 ? pos.speed : null,
+    p_heading: pos.heading != null && pos.heading >= 0 ? pos.heading : null,
   });
   if (error) return;
   await handleCommands((data ?? []) as Command[]);
@@ -122,8 +130,9 @@ export async function startBackgroundUpdates() {
   if (started) return;
   await Location.startLocationUpdatesAsync(LOCATION_TASK, {
     accuracy: Location.Accuracy.Balanced,
-    timeInterval: 5 * 60 * 1000,
-    distanceInterval: 50,
+    // update every minute while moving; the distance filter keeps it quiet when you're still
+    timeInterval: 60 * 1000,
+    distanceInterval: 75,
     pausesUpdatesAutomatically: false,
     showsBackgroundLocationIndicator: true,
     activityType: Location.ActivityType.Other,

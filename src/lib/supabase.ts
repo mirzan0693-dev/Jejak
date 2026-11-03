@@ -22,6 +22,11 @@ export type Profile = {
   display_name: string;
   avatar_path?: string | null;
   avatar_url?: string | null; // filled in by the app from avatar_path
+  active_vehicle?: 'car' | 'motorbike';
+  car_style?: string;
+  car_color?: string;
+  bike_style?: string;
+  bike_color?: string;
 };
 
 export type Device = {
@@ -35,6 +40,8 @@ export type Device = {
   lng: number | null;
   accuracy_m: number | null;
   located_at: string | null;
+  speed_mps?: number | null;
+  heading?: number | null;
   lost: boolean;
   lost_message: string | null;
   lost_phone: string | null;
@@ -53,6 +60,7 @@ export type Geofence = {
   id: string;
   watcher_id: string;
   subject_id: string;
+  created_by?: string;
   name: string;
   lat: number;
   lng: number;
