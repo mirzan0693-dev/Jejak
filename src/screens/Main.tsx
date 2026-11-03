@@ -2,7 +2,7 @@ import { Camera, Map, Marker, ViewAnnotation, type CameraRef } from '@maplibre/m
 import * as Location from 'expo-location';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert as RNAlert, Animated, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Appear, EASE_IN_OUT, useReducedMotion } from '../motion';
+import { Appear, EASE_IN_OUT, EASE_OUT, Pop, animateNextLayout, useGlidingLngLat, useReducedMotion } from '../motion';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   forgetLocalDevice,
@@ -83,27 +83,7 @@ export function Main({ userId }: { userId: string }) {
           <Camera ref={camera} initialViewState={{ center: [101.69, 3.14], zoom: 9 }} />
           {view.visiblePeople.map((p) =>
             p.device?.lat != null && p.device.lng != null ? (
-              // Marker shows the live view on Android (ViewAnnotation would freeze it into a snapshot)
-              <Marker
-                key={`p-${p.profile.id}`}
-                id={`p-${p.profile.id}`}
-                lngLat={[p.device.lng, p.device.lat]}
-                onPress={() => setPerson(p.profile.id)}
-              >
-                {(() => {
-                  const m = movingInfo(p.device);
-                  // keyed so switching between walking and driving fades the new pin in instead of snapping
-                  return m ? (
-                    <Appear key="moving">
-                      <MovingPin profile={p.profile} heading={m.heading ?? null} kmh={m.kmh} />
-                    </Appear>
-                  ) : (
-                    <Appear key="still">
-                      <Avatar name={displayName(p.profile)} url={p.profile.avatar_url} ring={isStale(p.device.located_at) ? color.textMuted : color.accent} />
-                    </Appear>
-                  );
-                })()}
-              </Marker>
+              <PersonPin key={`p-${p.profile.id}`} person={p} onPress={() => setPerson(p.profile.id)} />
             ) : null,
           )}
           {view.myDevices.map((d) =>
@@ -236,6 +216,20 @@ function PeopleTab({
   onInvite: () => void;
   refresh: () => Promise<void>;
 }) {
+  // someone who starts sharing with you gets a small welcome; people already there on open don't
+  const seen = useRef<Set<string> | null>(null);
+  const [newlyAdded, setNewlyAdded] = useState<string[]>([]);
+  useEffect(() => {
+    const ids = view.visiblePeople.map((p) => p.profile.id);
+    if (seen.current === null) {
+      seen.current = new Set(ids);
+      return;
+    }
+    const fresh = ids.filter((id) => !seen.current!.has(id));
+    ids.forEach((id) => seen.current!.add(id));
+    if (fresh.length) setNewlyAdded(fresh);
+  }, [view.visiblePeople.map((p) => p.profile.id).join(',')]);
+
   async function respond(id: string, accept: boolean) {
     const { error } = await supabase.rpc('respond_share', { share_id: id, accept });
     if (error) RNAlert.alert('Could not answer', errorText(error));
@@ -249,24 +243,7 @@ function PeopleTab({
   return (
     <>
       {view.incoming.map(({ share, other }) => (
-        <Card key={share.id}>
-          <T bold>
-            {share.owner_id === share.requested_by
-              ? `${displayName(other)} wants to share their location with you`
-              : `${displayName(other)} is asking to see your location`}
-          </T>
-          {share.owner_id !== share.requested_by ? (
-            <T muted>If you accept, they can see where you are{share.expires_at ? ' until the time they chose' : ' until you stop'}.</T>
-          ) : null}
-          <View style={{ flexDirection: 'row', gap: space.sm }}>
-            <View style={{ flex: 1 }}>
-              <Button label="Accept" onPress={() => respond(share.id, true)} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Button label="Decline" variant="secondary" onPress={() => respond(share.id, false)} />
-            </View>
-          </View>
-        </Card>
+        <RequestCard key={share.id} share={share} other={other} onAnswer={(accept) => respond(share.id, accept)} />
       ))}
 
       {view.visiblePeople.length === 0 && view.incoming.length === 0 ? (
@@ -274,8 +251,8 @@ function PeopleTab({
       ) : null}
 
       {view.visiblePeople.map((p) => (
+        <Pop key={p.profile.id} active={newlyAdded.includes(p.profile.id)}>
         <Row
-          key={p.profile.id}
           left={<Avatar name={displayName(p.profile)} url={p.profile.avatar_url} ring={isStale(p.device?.located_at ?? null) ? color.textMuted : color.accent} />}
           title={displayName(p.profile)}
           subtitle={[movingLabel(p.profile, p.device) ?? timeAgo(p.device?.located_at ?? null), distanceText(myPhone, p.device)]
@@ -283,6 +260,7 @@ function PeopleTab({
             .join(' · ')}
           onPress={() => onOpen(p.profile.id)}
         />
+        </Pop>
       ))}
 
       {view.outgoing.map(({ share, other }) => (
@@ -403,6 +381,7 @@ function PersonSheet({
     });
     setBusy(false);
     if (error) return setError(errorText(error));
+    animateNextLayout();
     setAdding(false);
     setPlaceName('');
     data.refresh();
@@ -484,7 +463,7 @@ function PersonSheet({
           {error ? <T color={color.danger}>{error}</T> : null}
         </Card>
       ) : (
-        <Button label="+ Add an alert" variant="secondary" onPress={() => setAdding(true)} />
+        <Button label="+ Add an alert" variant="secondary" onPress={() => (animateNextLayout(), setAdding(true))} />
       )}
 
       <Button label="Stop seeing their location" variant="danger" onPress={stopSeeing} />
@@ -545,6 +524,7 @@ function DeviceSheet({
   const [phone, setPhone] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
+  const [soundSent, setSoundSent] = useState(false);
 
   useEffect(() => {
     setMessage(device?.lost_message ?? 'This phone is lost. Please call me.');
@@ -566,6 +546,11 @@ function DeviceSheet({
       }
       const { error } = await supabase.from('commands').insert({ device_id: device!.id, user_id: userId, kind });
       if (error) throw error;
+      if (kind === 'play_sound') {
+        // the button itself confirms; the note below explains timing
+        setSoundSent(true);
+        setTimeout(() => setSoundSent(false), 2000);
+      }
       setNote(
         kind === 'play_sound'
           ? 'Sound sent. It plays right away if the phone has the app open, otherwise within a few minutes.'
@@ -604,7 +589,7 @@ function DeviceSheet({
       {device.platform === 'ios' ? (
         <T muted>On iPhone the sound may not play if the phone is on silent.</T>
       ) : null}
-      <Button label="Play sound" onPress={() => send('play_sound')} loading={busy === 'play_sound'} />
+      <Button label={soundSent ? 'Sound sent ✓' : 'Play sound'} onPress={() => send('play_sound')} loading={busy === 'play_sound'} />
       {device.lat != null ? (
         <Button
           label="Directions"
@@ -894,6 +879,7 @@ function SendAlertsCard({ data, view, myPhone, userId }: { data: AppData; view: 
     const { error } = await supabase.from('geofences').insert(rows);
     setBusy(false);
     if (error) return setError(errorText(error));
+    animateNextLayout();
     setOpen(false);
     setWho([]);
     setPlaceName('');
@@ -949,11 +935,11 @@ function SendAlertsCard({ data, view, myPhone, userId }: { data: AppData; view: 
           </View>
           <T muted>Uses where you are right now as the place.</T>
           <Button label="Turn on" onPress={save} loading={busy} />
-          <Button label="Cancel" variant="secondary" onPress={() => setOpen(false)} />
+          <Button label="Cancel" variant="secondary" onPress={() => (animateNextLayout(), setOpen(false))} />
           {error ? <T color={color.danger}>{error}</T> : null}
         </>
       ) : (
-        <Button label="+ Add" variant="secondary" onPress={() => setOpen(true)} />
+        <Button label="+ Add" variant="secondary" onPress={() => (animateNextLayout(), setOpen(true))} />
       )}
     </Card>
   );
@@ -1034,5 +1020,72 @@ function VehicleCard({ data, userId }: { data: AppData; userId: string }) {
       </View>
       <T muted>Switch between Car and Motorbike before you set off — the phone can't tell which one you're on.</T>
     </Card>
+  );
+}
+
+// ---------- a person's pin: glides to each new position instead of jumping ----------
+
+function PersonPin({ person: p, onPress }: { person: Person; onPress: () => void }) {
+  const lngLat = useGlidingLngLat([p.device!.lng!, p.device!.lat!]);
+  const m = movingInfo(p.device);
+  // Marker shows the live view on Android (ViewAnnotation would freeze it into a snapshot)
+  return (
+    <Marker id={`p-${p.profile.id}`} lngLat={lngLat} onPress={onPress}>
+      {/* keyed so switching between still and moving fades the new pin in instead of snapping */}
+      {m ? (
+        <Appear key="moving">
+          <MovingPin profile={p.profile} heading={m.heading ?? null} kmh={m.kmh} />
+        </Appear>
+      ) : (
+        <Appear key="still">
+          <Avatar name={displayName(p.profile)} url={p.profile.avatar_url} ring={isStale(p.device!.located_at) ? color.textMuted : color.accent} />
+        </Appear>
+      )}
+    </Marker>
+  );
+}
+
+// ---------- share request card: fades in, and fades out quicker once answered ----------
+
+function RequestCard({
+  share,
+  other,
+  onAnswer,
+}: {
+  share: Share;
+  other: Profile;
+  onAnswer: (accept: boolean) => Promise<void>;
+}) {
+  const out = useRef(new Animated.Value(1)).current;
+  const [busy, setBusy] = useState<boolean | null>(null);
+  async function answer(accept: boolean) {
+    setBusy(accept);
+    await new Promise<void>((r) => Animated.timing(out, { toValue: 0, duration: 150, easing: EASE_OUT, useNativeDriver: true }).start(() => r()));
+    animateNextLayout(); // the list closes the gap smoothly
+    await onAnswer(accept);
+  }
+  return (
+    <Appear>
+      <Animated.View style={{ opacity: out, transform: [{ scale: out.interpolate({ inputRange: [0, 1], outputRange: [0.97, 1] }) }] }}>
+        <Card>
+          <T bold>
+            {share.owner_id === share.requested_by
+              ? `${displayName(other)} wants to share their location with you`
+              : `${displayName(other)} is asking to see your location`}
+          </T>
+          {share.owner_id !== share.requested_by ? (
+            <T muted>If you accept, they can see where you are{share.expires_at ? ' until the time they chose' : ' until you stop'}.</T>
+          ) : null}
+          <View style={{ flexDirection: 'row', gap: space.sm }}>
+            <View style={{ flex: 1 }}>
+              <Button label="Accept" onPress={() => answer(true)} loading={busy === true} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Button label="Decline" variant="secondary" onPress={() => answer(false)} loading={busy === false} />
+            </View>
+          </View>
+        </Card>
+      </Animated.View>
+    </Appear>
   );
 }

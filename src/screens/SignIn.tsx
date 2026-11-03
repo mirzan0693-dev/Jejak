@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { View } from 'react-native';
 import { AUTH_REDIRECT } from '../lib/authLink';
+import { FadeUp } from '../motion';
 import { errorText, supabase } from '../lib/supabase';
 import { color, space } from '../theme';
 import { Button, Card, Field, T } from '../ui';
@@ -48,6 +49,8 @@ export function SignIn({ linkError }: { linkError?: string | null }) {
         <T muted>See where your family is, and find your phone, on Android and iPhone.</T>
       </View>
       <Card>
+        {/* keyed so "Check your email" rises and fades in instead of swapping instantly */}
+        <FadeUp key={step} style={{ gap: space.md }}>
         {step === 'email' ? (
           <>
             <Field
@@ -86,6 +89,7 @@ export function SignIn({ linkError }: { linkError?: string | null }) {
             <Button label="Send again / different email" variant="secondary" onPress={() => setStep('email')} />
           </>
         )}
+        </FadeUp>
         {error || linkError ? <T color={color.danger}>{error || linkError}</T> : null}
       </Card>
     </View>

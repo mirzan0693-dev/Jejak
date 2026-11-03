@@ -47,17 +47,34 @@ export function Button({ label, onPress, variant = 'primary', loading, disabled 
       {loading ? (
         <ActivityIndicator color={variant === 'primary' ? color.onAccent : color.text} />
       ) : (
-        <Text
-          style={[
-            s.btnText,
-            { color: variant === 'primary' ? color.onAccent : variant === 'danger' ? color.danger : color.text },
-          ]}
-        >
-          {label}
-        </Text>
+        <LabelFade label={label}>
+          <Text
+            style={[
+              s.btnText,
+              { color: variant === 'primary' ? color.onAccent : variant === 'danger' ? color.danger : color.text },
+            ]}
+          >
+            {label}
+          </Text>
+        </LabelFade>
       )}
     </PressScale>
   );
+}
+
+/** When a button's text changes (Play sound → Sound sent ✓), crossfade it instead of swapping. Not on first show. */
+function LabelFade({ label, children }: { label: string; children: ReactNode }) {
+  const v = useRef(new Animated.Value(1)).current;
+  const first = useRef(true);
+  useEffect(() => {
+    if (first.current) {
+      first.current = false;
+      return;
+    }
+    v.setValue(0.25);
+    Animated.timing(v, { toValue: 1, duration: 200, easing: EASE_OUT, useNativeDriver: true }).start();
+  }, [label]);
+  return <Animated.View style={{ opacity: v }}>{children}</Animated.View>;
 }
 
 export function Field(props: TextInputProps & { label: string }) {
