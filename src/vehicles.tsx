@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { Animated, Easing, View } from 'react-native';
+import { Animated, Easing, Text, View } from 'react-native';
 import Svg, { Circle, G, Line, Path, Rect } from 'react-native-svg';
 import type { Device, Profile } from './lib/supabase';
 import { color as theme } from './theme';
@@ -196,7 +196,11 @@ export function VehicleArt({
 export function MovingPin({ profile, heading, kmh }: { profile: Profile; heading: number | null; kmh: number }) {
   const bounce = useRef(new Animated.Value(0)).current;
   const lines = useRef(new Animated.Value(0)).current;
-  const fast = kmh > 70;
+  // hysteresis: switch to the quick bounce above 75 km/h, back below 65, so it can't flicker around one number
+  const fastRef = useRef(kmh > 75);
+  if (kmh > 75) fastRef.current = true;
+  else if (kmh < 65) fastRef.current = false;
+  const fast = fastRef.current;
 
   const reduced = useReducedMotion();
 
@@ -253,7 +257,7 @@ export function MovingPin({ profile, heading, kmh }: { profile: Profile; heading
         <Avatar name={profile.display_name || profile.email} url={profile.avatar_url} size={26} />
       </View>
       <View style={{ backgroundColor: theme.surface, borderRadius: 8, paddingHorizontal: 6, paddingVertical: 1, marginTop: 1, borderWidth: 1, borderColor: theme.border }}>
-        <Animated.Text style={{ color: theme.text, fontSize: 11, fontWeight: '700' }}>{kmh} km/h</Animated.Text>
+        <Text style={{ color: theme.text, fontSize: 11, fontWeight: '700' }}>{kmh} km/h</Text>
       </View>
     </View>
   );

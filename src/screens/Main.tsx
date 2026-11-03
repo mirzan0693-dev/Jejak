@@ -1,4 +1,4 @@
-import { Camera, Map, ViewAnnotation, type CameraRef } from '@maplibre/maplibre-react-native';
+import { Camera, Map, Marker, ViewAnnotation, type CameraRef } from '@maplibre/maplibre-react-native';
 import * as Location from 'expo-location';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert as RNAlert, Animated, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -83,7 +83,8 @@ export function Main({ userId }: { userId: string }) {
           <Camera ref={camera} initialViewState={{ center: [101.69, 3.14], zoom: 9 }} />
           {view.visiblePeople.map((p) =>
             p.device?.lat != null && p.device.lng != null ? (
-              <ViewAnnotation
+              // Marker shows the live view on Android (ViewAnnotation would freeze it into a snapshot)
+              <Marker
                 key={`p-${p.profile.id}`}
                 id={`p-${p.profile.id}`}
                 lngLat={[p.device.lng, p.device.lat]}
@@ -102,7 +103,7 @@ export function Main({ userId }: { userId: string }) {
                     </Appear>
                   );
                 })()}
-              </ViewAnnotation>
+              </Marker>
             ) : null,
           )}
           {view.myDevices.map((d) =>
