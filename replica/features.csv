@@ -1,0 +1,28 @@
+feature,area,priority,original,clone,notes
+Sign in with phone or email,account,must,yes,yes,
+Location + notification permission onboarding,account,must,yes,yes,explain why Always is needed
+Invite a person to share location,people,must,yes,yes,via contact or link
+Accept / decline invite,people,must,yes,yes,consent gate
+Share duration (1 hr / end of day / indefinitely),people,must,yes,yes,
+Map with people pins,people,must,yes,yes,
+Person detail: address distance last seen,people,must,yes,partial,show stale honestly
+Directions to a person,people,should,yes,yes,open Google/Apple Maps
+Stop sharing / pause all,people,must,yes,yes,one tap
+Persistent sharing indicator on sharer's phone,safety,must,partial,yes,clone makes it always visible
+Notify subject when an alert is set on them,safety,must,yes,yes,
+Arrive/leave alerts (geofence),people,should,yes,yes,iOS 20-region limit
+Cross-platform Android + iOS,platform,must,no,yes,the whole point of the clone
+Devices list with battery and last seen,devices,must,yes,yes,
+Locate my own device on map,devices,must,yes,yes,
+Play sound on device,devices,must,yes,partial,iOS silent mode needs Critical Alerts entitlement
+Lost mode: message + contact on screen,devices,should,yes,partial,notice not a real lock
+Notify when found (offline device comes online),devices,should,yes,yes,
+Notify when left behind,devices,could,yes,no,
+Web finder (find phone from browser),devices,should,yes,no,
+Location history (short),people,could,no,no,
+Offline finding network,devices,skip,yes,skip,Apple's network and its users
+AirTags / items / Find Nearby,items,skip,yes,skip,hardware + network
+Activation Lock,devices,skip,yes,skip,OS-level only
+Remote lock / erase,devices,skip,yes,skip,iOS forbids; Android device-admin restricted
+Locate when phone off or app force-closed,devices,skip,yes,skip,OS-level only
+Siri / iMessage integration,platform,skip,yes,skip,Apple-only

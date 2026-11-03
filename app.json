@@ -1,25 +1,48 @@
 {
   "expo": {
-    "name": "jejak",
+    "name": "Jejak",
     "slug": "jejak",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#0F1416",
     "ios": {
-      "supportsTablet": true
+      "bundleIdentifier": "com.mirzan.jejak",
+      "supportsTablet": false,
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
+      "package": "com.mirzan.jejak",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#0F1416",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false
     },
-    "web": {
-      "favicon": "./assets/favicon.png"
-    }
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Jejak shows your location to the people you approve, and helps you find this phone.",
+          "locationAlwaysAndWhenInUsePermission": "Allow \"Always\" so the people you approve see where you are, and you can find this phone, even when Jejak is closed. You can stop sharing at any time.",
+          "isIosBackgroundLocationEnabled": true,
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#2BB673"
+        }
+      ],
+      "@maplibre/maplibre-react-native",
+      "expo-dev-client"
+    ]
   }
 }

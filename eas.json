@@ -1,0 +1,26 @@
+{
+  "cli": {
+    "version": ">= 16.0.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "preview": {
+      "distribution": "internal",
+      "android": { "buildType": "apk" },
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "PASTE_YOUR_SUPABASE_URL",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "PASTE_YOUR_SUPABASE_ANON_KEY"
+      }
+    },
+    "production": {
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "PASTE_YOUR_SUPABASE_URL",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "PASTE_YOUR_SUPABASE_ANON_KEY"
+      }
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}
