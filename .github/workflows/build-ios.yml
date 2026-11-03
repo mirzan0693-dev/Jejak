@@ -8,8 +8,8 @@ jobs:
     runs-on: macos-latest
     timeout-minutes: 60
     env:
-      EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-      EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+      EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL || 'https://wmxechxoqcimgvwmdvgn.supabase.co' }}
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndteGVjaHhvcWNpbWd2d21kdmduIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTM3MDc2NzcsImV4cCI6MjEwOTI4MzY3N30.mZzEyKTRtDw8LQuomrR18_lqM1ExI2BiVQbzFNLX54E' }}
       EXPO_NO_TELEMETRY: 1
     steps:
       - uses: actions/checkout@v4
