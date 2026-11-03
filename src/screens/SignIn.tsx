@@ -10,7 +10,6 @@ export function SignIn({ linkError }: { linkError?: string | null }) {
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
   const [step, setStep] = useState<'email' | 'sent'>('email');
-  const [showCode, setShowCode] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -27,8 +26,9 @@ export function SignIn({ linkError }: { linkError?: string | null }) {
     setBusy(false);
     if (error) {
       const msg = errorText(error);
-      return setError(/rate|too many|seconds/i.test(msg) ? 'Too many emails sent. Wait a minute and try again.' : msg);
+      return setError(/rate|too many|seconds/i.test(msg) ? 'Too many codes sent. Wait a minute and try again.' : msg);
     }
+    setCode('');
     setStep('sent');
   }
 
@@ -37,7 +37,7 @@ export function SignIn({ linkError }: { linkError?: string | null }) {
     setBusy(true);
     const { error } = await supabase.auth.verifyOtp({ email: cleanEmail, token: code.trim(), type: 'email' });
     setBusy(false);
-    if (error) setError('That code did not work. Check it, or send a new email.');
+    if (error) setError('That code didn\'t work. Check it, or send a new one.');
   }
 
   return (
@@ -62,31 +62,27 @@ export function SignIn({ linkError }: { linkError?: string | null }) {
               autoComplete="email"
               placeholder="you@example.com"
             />
-            <Button label="Email me a sign-in link" onPress={send} loading={busy} />
+            <Button label="Email me a code" onPress={send} loading={busy} />
           </>
         ) : (
           <>
-            <T bold>Check your email</T>
-            <T muted>
-              We sent a sign-in link to {cleanEmail}. Open the email on this phone and tap the link — it opens Jejak and signs
-              you in. Check spam if you don't see it.
-            </T>
-            {showCode ? (
-              <>
-                <Field
-                  label="Code from the email"
-                  value={code}
-                  onChangeText={setCode}
-                  keyboardType="number-pad"
-                  autoComplete="one-time-code"
-                  maxLength={10}
-                />
-                <Button label="Sign in with code" onPress={verify} loading={busy} disabled={code.trim().length < 6} />
-              </>
-            ) : (
-              <Button label="My email has a code instead" variant="secondary" onPress={() => setShowCode(true)} />
-            )}
-            <Button label="Send again / different email" variant="secondary" onPress={() => setStep('email')} />
+            <T bold>Enter the code</T>
+            <T muted>We emailed a 6-digit code to {cleanEmail}. Check spam if it isn't there in a minute.</T>
+            <Field
+              label="Code"
+              value={code}
+              onChangeText={(t) => setCode(t.replace(/\D/g, ''))}
+              keyboardType="number-pad"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              textContentType="oneTimeCode"
+              autoFocus
+              maxLength={10}
+              placeholder="123456"
+              onSubmitEditing={verify}
+            />
+            <Button label="Sign in" onPress={verify} loading={busy} disabled={code.length < 6} />
+            <Button label="Send a new code / change email" variant="secondary" onPress={() => setStep('email')} />
           </>
         )}
         </FadeUp>

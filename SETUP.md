@@ -8,9 +8,15 @@ Steps 1–2 work on your phone's browser. Step 3 needs your computer.
 1. Go to https://supabase.com → Start your project → sign in with GitHub or email.
 2. New project → name it `jejak`, choose region **Southeast Asia (Singapore)**, set a database password (save it somewhere), Create.
 3. When it's ready: left menu → **SQL Editor** → New query → paste the whole of `supabase/schema.sql` → **Run**. It should say "Success".
-4. Left menu → **Authentication → Sign In / Providers → Email**: make sure Email is enabled.
-5. **Authentication → Emails → Magic Link** template: change the body so it shows the code, e.g.
-   `Your Jejak code is {{ .Token }}` → Save. (The app signs in with a code, not a link.)
+4. **Send sign-in codes from your Gmail** (Supabase's built-in sender only allows 2 emails an hour):
+   1. Google Account → **Security** → turn on **2-Step Verification**, then open https://myaccount.google.com/apppasswords,
+      create an app password named `Jejak` and copy the 16 letters.
+   2. Supabase → **Authentication → Emails → SMTP Settings** → **Enable custom SMTP**:
+      host `smtp.gmail.com`, port `465`, username = your Gmail address, password = the 16-letter app password,
+      sender email = your Gmail address, sender name `Jejak`. Save.
+   3. **Authentication → Rate Limits** → *Rate limit for sending emails* → `30` per hour → Save.
+5. **Authentication → Emails → Templates**: in both **Magic Link** and **Confirm signup**, set
+   subject `Your Jejak code: {{ .Token }}` and body `<h2>{{ .Token }}</h2><p>Enter this code in Jejak to sign in. It expires in 1 hour.</p>` → Save.
 6. **Project Settings → API**: copy the **Project URL** and the **anon public** key.
 
 ## 2. Put your keys in the app
@@ -53,7 +59,7 @@ On the iPhone:
 1. Open your site address in **Safari** (not Chrome).
 2. Tap **Share** → **Add to Home Screen** → **Add**.
 3. Open **Jejak** from the home screen, sign in, and allow location and notifications.
-   Sign in from the home-screen app itself, then open the email link: if it opens in Safari instead, sign in again from there and reopen the home-screen app.
+   Sign in from the home-screen app and type the 6-digit code from the email there (don't tap any link in Safari).
 
 Every push to GitHub updates the site automatically.
 
