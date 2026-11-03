@@ -18,7 +18,26 @@ Steps 1–2 work on your phone's browser. Step 3 needs your computer.
 Open `eas.json` and replace both `PASTE_YOUR_SUPABASE_URL` and both `PASTE_YOUR_SUPABASE_ANON_KEY` with the values from step 1.6.
 (The anon key is safe to put in the app — the database rules decide what each person can see.)
 
-## 3. Build the app (EAS, free tier) — on your computer
+## 3a. Easiest: build on GitHub (free, from your phone)
+
+1. On GitHub open the repo → **Settings → Secrets and variables → Actions → New repository secret**. Add two:
+   - `SUPABASE_URL` = your Project URL
+   - `SUPABASE_ANON_KEY` = your anon public key
+2. **Actions** tab → pick **Build Android app (APK)** or **Build iPhone app** → **Run workflow** → Run.
+3. Wait ~15 min (Android) or ~25 min (iPhone). Open the finished run → **Artifacts** at the bottom → download.
+   GitHub delivers it as a .zip: unzip to get `Jejak.apk` or `Jejak-unsigned.ipa`.
+
+**Android:** open `Jejak.apk` on the phone and install (allow "install unknown apps").
+
+**iPhone, free (no developer account):**
+1. On your Windows or Mac computer install **Sideloadly** from https://sideloadly.io (on Windows also install iTunes and iCloud from Apple's website, not the Microsoft Store).
+2. Plug in the iPhone, drag `Jejak-unsigned.ipa` into Sideloadly, enter your Apple ID, Start.
+3. iPhone: **Settings → Privacy & Security → Developer Mode → On** (restarts), then
+   **Settings → General → VPN & Device Management → your Apple ID → Trust**.
+4. The app works for **7 days**. Before it expires, plug in and press Start in Sideloadly again (your data stays).
+   Free Apple IDs allow 3 sideloaded apps at once.
+
+## 3b. Alternative: build with EAS — on your computer
 
 1. Install Node.js LTS from https://nodejs.org
 2. Unzip this project, open a terminal in the folder, then run:
